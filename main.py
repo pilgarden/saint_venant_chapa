@@ -41,7 +41,7 @@ def plot_chapa(L, H, raio, tensao):
     plt.tight_layout()
     plt.show()
 
-def simulacao_saint_venant_mef(comparativo=False):
+def simulacao_saint_venant_mef(L = 200.0. H = 100.0, raio_furo = 10.0, tensao_axial = 100.0, comparativo=False):
     # --- Parâmetros de Entrada ---
     # Geometria e Carga
     L, H = 200.0, 100.0  # mm
@@ -123,6 +123,12 @@ def simulacao_saint_venant_mef(comparativo=False):
 
     plt.tight_layout()
     plt.show()
+
+def executar_simulacao(largura = 200.0, altura = 100.0, diametro_furo = 20.0, tensao_tracao = 100.0, graficos_juntos=False):
+    plot_chapa(L=largura, H=altura, raio=diametro_furo/2, tensao=tensao_tracao)
+    print('\nAguarde o processamento finalizar\n')
+    simulacao_saint_venant_mef(L = largura. H = altura, raio_furo = diametro_furo/2, tensao_axial = tensao_tracao, comparativo=graficos_juntos)
+
 
 if __name__ == "__main__":
     # 1. Gera a figura técnica isolada
