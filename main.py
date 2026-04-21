@@ -43,10 +43,6 @@ def plot_chapa(L, H, raio, tensao):
 
 def simulacao_saint_venant_mef(L = 200.0, H = 100.0, raio_furo = 10.0, tensao_axial = 100.0, comparativo=False):
     # --- Parâmetros de Entrada ---
-    # Geometria e Carga
-    L, H = 200.0, 100.0  # mm
-    raio_furo = 10.0         # mm
-    tensao_axial = 100.0  # MPa (Tensão nominal de tração)
     
     # Malha
     nx, ny = 600, 300 
