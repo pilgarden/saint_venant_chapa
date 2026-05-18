@@ -78,7 +78,7 @@ def calcular_campo_tensoes(L, H, raio_furo, tensao_axial, nx=600, ny=300):
     
     return X, Y, s_x, Xc, Yc
 
-def plot_simulacao_saint_venant(X, Y, s_x, Xc, Yc, L, H, raio_furo, tensao_axial, comparativo):
+def plot_simulacao_saint_venant(X, Y, s_x, Xc, Yc, L, H, raio_furo, tensao_axial, comparativo, x_coords):
     """Renderiza os gráficos de contorno e perfis de tensão."""
     vmin_plot = -100.0 if tensao_axial > 0 else tensao_axial * 3.5
     vmax_plot = tensao_axial * 3.5 if tensao_axial > 0 else -100.0
@@ -87,14 +87,20 @@ def plot_simulacao_saint_venant(X, Y, s_x, Xc, Yc, L, H, raio_furo, tensao_axial
     if tensao_axial == 0:
         vmin_plot, vmax_plot = -10, 10
         
+    n_sec = len(x_coords)
+    if n_sec == 0:
+        x_coords = [Xc]
+        n_sec = 1
+        
     if comparativo:
         fig = plt.figure(figsize=(12, 11))
         gs = fig.add_gridspec(2, 1, height_ratios=[1.3, 1])
         axes_sections = [fig.add_subplot(gs[1, 0])]
     else:
-        fig = plt.figure(figsize=(16, 11))
-        gs = fig.add_gridspec(2, 3, height_ratios=[1.3, 1])
-        axes_sections = [fig.add_subplot(gs[1, 0]), fig.add_subplot(gs[1, 1]), fig.add_subplot(gs[1, 2])]
+        # Aumenta a largura da imagem dinamicamente para caber todas as seções
+        fig = plt.figure(figsize=(max(12, 4.5 * n_sec), 11))
+        gs = fig.add_gridspec(2, n_sec, height_ratios=[1.3, 1])
+        axes_sections = [fig.add_subplot(gs[1, i]) for i in range(n_sec)]
 
     # Gráfico de Contorno (Heatmap)
     ax_map = fig.add_subplot(gs[0, :])
@@ -105,24 +111,28 @@ def plot_simulacao_saint_venant(X, Y, s_x, Xc, Yc, L, H, raio_furo, tensao_axial
     furo = plt.Circle((Xc, Yc), raio_furo, color='white', zorder=12, ec='black', lw=1.2)
     ax_map.add_patch(furo)
     
+    cmap_colors = plt.cm.tab10(np.linspace(0, 1, max(10, n_sec)))
+    for idx, x_val in enumerate(x_coords):
+        cor = cmap_colors[idx % 10]
+        ax_map.axvline(x_val, color=cor, linestyle='--', linewidth=2, alpha=0.9)
+        bbox_props = dict(boxstyle="round,pad=0.3", fc="white", ec=cor, lw=1.5, alpha=0.9)
+        ax_map.text(x_val + L*0.005, H*0.05, f'x={x_val:g}', color='black', fontsize=10, fontweight='bold', bbox=bbox_props)
+
     ax_map.set_title('Campo de Tensões $\sigma_{xx}$ (Equações de Kirsch)', fontsize=15, fontweight='bold')
     ax_map.set_xlabel('Comprimento (mm)', fontsize=12)
     ax_map.set_ylabel('Altura (mm)', fontsize=12)
     ax_map.set_aspect('equal')
     ax_map.tick_params(labelsize=11)
 
-    # Extração de fatias (seções)
-    x_coords = [Xc, Xc + 2*raio_furo, Xc + 10*raio_furo]
-    colors = ['#d62728', '#2ca02c', '#1f77b4'] 
-    labels = ['Seção no Furo ($x = L/2$)', 'Seção Intermediária ($x = L/2 + 2R$)', 'Região de Saint-Venant ($x = L/2 + 10R$)']
-    
     y_fine = np.linspace(0, H, 800)
     
-    for i, (sx, color, lab) in enumerate(zip(x_coords, colors, labels)):
+    for i, (sx, color) in enumerate(zip(x_coords, cmap_colors)):
         # Evita extrair fatias fora da chapa
-        if sx > L:
+        if sx > L or sx < 0:
             continue
             
+        lab = f'Seção x = {sx:g} mm'
+        
         stress_slice = griddata((X.flatten(), Y.flatten()), s_x.flatten(), 
                                 (np.full_like(y_fine, sx), y_fine), method='linear')
         
@@ -130,7 +140,7 @@ def plot_simulacao_saint_venant(X, Y, s_x, Xc, Yc, L, H, raio_furo, tensao_axial
         target_ax.plot(stress_slice, y_fine, color=color, lw=3, label=lab)
         
         if not comparativo:
-            target_ax.set_title(lab, fontsize=13)
+            target_ax.set_title(lab, fontsize=13, color=color, fontweight='bold')
             target_ax.set_xlim(vmin_plot * 1.1, vmax_plot * 1.1)
             target_ax.axvline(0, color='black', lw=1, ls='-')
         
@@ -141,7 +151,7 @@ def plot_simulacao_saint_venant(X, Y, s_x, Xc, Yc, L, H, raio_furo, tensao_axial
 
     axes_sections[0].set_ylabel('Altura da Chapa $y$ (mm)', fontsize=12)
     if comparativo: 
-        axes_sections[0].legend(fontsize=11)
+        axes_sections[0].legend(fontsize=11, loc='best')
 
     plt.tight_layout()
     return fig
@@ -163,6 +173,26 @@ def main():
         tensao = st.number_input("Tensão de Tração (MPa):", value=100.0, step=10.0)
         
         st.divider()
+        
+        st.header("Análise de Seções de Corte")
+        st.write("Indique as posições onde as fatias de tensão serão extraídas.")
+        
+        val_padrao = f"{L/2}, {L/2 + diametro}, {L - 10}"
+        secoes_str = st.text_input("Cortes em X (separados por vírgula) [mm]:", value=val_padrao)
+        
+        # Parsing seguro das coordenadas X
+        try:
+            x_coords_raw = [float(x.strip()) for x in secoes_str.split(',')]
+            x_coords = sorted([x for x in x_coords_raw if 0 <= x <= L])
+            if not x_coords:
+                st.warning("Nenhuma seção válida dentro da chapa informada.")
+                x_coords = [L/2]
+        except Exception:
+            st.error("Formato inválido. Use vírgulas. Ex: 100, 120, 150")
+            x_coords = [L/2]
+            
+        st.divider()
+        st.header("Opções Visuais")
         graficos_juntos = st.toggle("Sobrepor Gráficos de Seção", value=False, 
                                    help="Ative para plotar todas as curvas de tensão no mesmo eixo.")
         
@@ -199,7 +229,7 @@ def main():
                 X, Y, s_x, Xc, Yc = calcular_campo_tensoes(L, H, raio, tensao)
                 
                 # Renderiza figura
-                fig_mef = plot_simulacao_saint_venant(X, Y, s_x, Xc, Yc, L, H, raio, tensao, graficos_juntos)
+                fig_mef = plot_simulacao_saint_venant(X, Y, s_x, Xc, Yc, L, H, raio, tensao, graficos_juntos, x_coords)
                 st.pyplot(fig_mef)
 
 if __name__ == "__main__":
