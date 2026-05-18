@@ -4,18 +4,24 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from scipy.interpolate import griddata
 
-def aplicar_tema(fig, axes, fg_color, is_mapa=False):
-    """Aplica estética Tufte e transparência total aos gráficos Matplotlib."""
-    # Transparência total no fundo da figura (remove o aspecto de "imagem colada")
-    fig.patch.set_alpha(0.0)
+def aplicar_tema(fig, axes, fg_color, bg_color='white', is_mapa=False, usar_transparencia=True):
+    """Aplica estética Tufte e gerencia o fundo transparente ou sólido."""
+    if usar_transparencia:
+        fig.patch.set_alpha(0.0)
+    else:
+        fig.patch.set_facecolor(bg_color)
+        fig.patch.set_alpha(1.0)
     
     if not isinstance(axes, (list, np.ndarray)):
         axes = [axes]
         
     for ax in axes:
-        # Fundo do eixo transparente (exceto para o mapa de calor)
         if not is_mapa:
-            ax.patch.set_alpha(0.0)
+            if usar_transparencia:
+                ax.patch.set_alpha(0.0)
+            else:
+                ax.set_facecolor(bg_color)
+                ax.patch.set_alpha(1.0)
             
         ax.tick_params(axis='both', colors=fg_color, width=0.8, length=4, labelsize=10)
         ax.xaxis.label.set_color(fg_color)
@@ -36,7 +42,7 @@ def aplicar_tema(fig, axes, fg_color, is_mapa=False):
                 spine.set_edgecolor(fg_color)
                 spine.set_alpha(0.3)
 
-def plot_chapa(L, H, raio, tensao, fg_color='black', chapa_color='#F0F0F0'):
+def plot_chapa(L, H, raio, tensao, fg_color='black', chapa_color='#F0F0F0', bg_color='white', usar_transparencia=True):
     """Gera o esquema visual do problema de contorno."""
     fig, ax = plt.subplots(figsize=(8, 4.5), dpi=120)
     
@@ -44,8 +50,9 @@ def plot_chapa(L, H, raio, tensao, fg_color='black', chapa_color='#F0F0F0'):
     chapa = patches.Rectangle((0, 0), L, H, lw=1.5, ec=fg_color, fc=chapa_color, zorder=1, alpha=0.8)
     ax.add_patch(chapa)
     
-    # Desenho do Furo (transparente para herdar fundo do Streamlit)
-    furo = patches.Circle((L/2, H/2), raio, fc='none', ec=fg_color, lw=1.5, zorder=2)
+    # Desenho do Furo (branco no modo claro, transparente no modo escuro)
+    cor_furo = 'none' if usar_transparencia else bg_color
+    furo = patches.Circle((L/2, H/2), raio, fc=cor_furo, ec=fg_color, lw=1.5, zorder=2)
     ax.add_patch(furo)
     
     # Hachuras do engaste sutis
@@ -78,7 +85,7 @@ def plot_chapa(L, H, raio, tensao, fg_color='black', chapa_color='#F0F0F0'):
     ax.set_aspect('equal')
     ax.axis('off')
     
-    aplicar_tema(fig, ax, fg_color)
+    aplicar_tema(fig, ax, fg_color, bg_color, usar_transparencia=usar_transparencia)
     plt.tight_layout()
     return fig
 
@@ -104,7 +111,7 @@ def calcular_campo_tensoes(L, H, raio_furo, tensao_axial, nx=600, ny=300):
     
     return X, Y, s_x, Xc, Yc
 
-def plot_mapa_calor(X, Y, s_x, Xc, Yc, L, H, raio_furo, tensao_axial, x_coords, fg_color):
+def plot_mapa_calor(X, Y, s_x, Xc, Yc, L, H, raio_furo, tensao_axial, x_coords, fg_color, bg_color='white', usar_transparencia=True):
     """Renderiza isoladamente o mapa de calor das tensões (Heatmap)."""
     vmin_plot = -100.0 if tensao_axial > 0 else tensao_axial * 3.5
     vmax_plot = tensao_axial * 3.5 if tensao_axial > 0 else -100.0
@@ -120,7 +127,8 @@ def plot_mapa_calor(X, Y, s_x, Xc, Yc, L, H, raio_furo, tensao_axial, x_coords, 
     cbar.outline.set_edgecolor(fg_color)
     cbar.outline.set_alpha(0.3)
     
-    furo = plt.Circle((Xc, Yc), raio_furo, color='none', zorder=12, ec=fg_color, lw=1.5)
+    cor_furo = 'none' if usar_transparencia else bg_color
+    furo = plt.Circle((Xc, Yc), raio_furo, color=cor_furo, zorder=12, ec=fg_color, lw=1.5)
     ax_map.add_patch(furo)
     
     n_sec = max(1, len(x_coords))
@@ -129,7 +137,7 @@ def plot_mapa_calor(X, Y, s_x, Xc, Yc, L, H, raio_furo, tensao_axial, x_coords, 
         cor = cmap_colors[idx % 8]
         ax_map.axvline(x_val, color=cor, linestyle='--', linewidth=1.8, alpha=0.85)
         # Bbox sutil e transparente
-        bbox_props = dict(boxstyle="round,pad=0.3", fc='none', ec=cor, lw=1.2, alpha=0.8)
+        bbox_props = dict(boxstyle="round,pad=0.3", fc=bg_color, ec=cor, lw=1.2, alpha=0.8)
         ax_map.text(x_val + L*0.015, H*0.05, f'x={x_val:g}', color=fg_color, fontsize=9, fontweight='600', bbox=bbox_props)
 
     ax_map.set_title('Campo de Tensões $\sigma_{xx}$ (Equações de Kirsch)', fontweight='600', pad=15)
@@ -137,11 +145,11 @@ def plot_mapa_calor(X, Y, s_x, Xc, Yc, L, H, raio_furo, tensao_axial, x_coords, 
     ax_map.set_ylabel('Altura (mm)', fontsize=11, labelpad=10)
     ax_map.set_aspect('equal')
     
-    aplicar_tema(fig, ax_map, fg_color, is_mapa=True)
+    aplicar_tema(fig, ax_map, fg_color, bg_color, is_mapa=True, usar_transparencia=usar_transparencia)
     plt.tight_layout()
     return fig
 
-def plot_graficos_secao(X, Y, s_x, Xc, L, H, tensao_axial, comparativo, x_coords, fg_color):
+def plot_graficos_secao(X, Y, s_x, Xc, L, H, tensao_axial, comparativo, x_coords, fg_color, bg_color='white', usar_transparencia=True):
     """Renderiza a linha inferior contendo os cortes transversais da tensão."""
     vmin_plot = -100.0 if tensao_axial > 0 else tensao_axial * 3.5
     vmax_plot = tensao_axial * 3.5 if tensao_axial > 0 else -100.0
@@ -190,7 +198,7 @@ def plot_graficos_secao(X, Y, s_x, Xc, L, H, tensao_axial, comparativo, x_coords
         legend = axes_sections[0].legend(fontsize=10, loc='best', frameon=False)
         plt.setp(legend.get_texts(), color=fg_color)
 
-    aplicar_tema(fig, axes_sections, fg_color)
+    aplicar_tema(fig, axes_sections, fg_color, bg_color, usar_transparencia=usar_transparencia)
     fig.subplots_adjust(wspace=0.3)
     plt.tight_layout()
     return fig
@@ -207,10 +215,13 @@ def main():
         st.header("Configurações do Gráfico")
         tema_selecionado = st.selectbox("Tema Visual:", ["Modo Escuro (Dashboard)", "Modo Claro (Artigos/Word)"])
         
+        # Controle de transparência e cores dependendo do tema escolhido
         if "Claro" in tema_selecionado:
-            fg_color, chapa_color = "#333333", "#F5F5F5"
+            fg_color, chapa_color, bg_color = "#333333", "#F5F5F5", "white"
+            usar_transparencia = False
         else:
-            fg_color, chapa_color = "#FAFAFA", "#1E1E1E"
+            fg_color, chapa_color, bg_color = "#FAFAFA", "#1E1E1E", "#0E1117"
+            usar_transparencia = True
 
         st.divider()
         
@@ -228,19 +239,6 @@ def main():
         val_padrao = f"{L/2}, {L/2 + diametro}, {L - 10}"
         secoes_str = st.text_input("Cortes em X (separados por vírgula) [mm]:", value=val_padrao)
         
-        st.divider()
-        
-        st.markdown(
-            """
-            <div style='text-align: center; color: gray; font-size: 0.85em;'>
-                <b>Princípio de Saint-Venant</b><br>
-                Desenvolvido por: Pedro Jardim<br>
-                <i>v1.0 - Fevereiro/2026</i>
-            </div>
-            """, 
-            unsafe_allow_html=True
-        )
-                
         # Parsing seguro das coordenadas X
         try:
             x_coords_raw = [float(x.strip()) for x in secoes_str.split(',')]
@@ -264,6 +262,19 @@ def main():
         if diametro >= L:
             st.error("Erro: O diâmetro do furo deve ser menor que o comprimento da chapa.")
             geometria_valida = False
+            
+        # Adição do Footer solicitado na barra lateral
+        st.markdown(
+            """
+            <br><br><br>
+            <div style='text-align: center; color: gray; font-size: 0.85em;'>
+                <b>Princípio de Saint-Venant</b><br>
+                Desenvolvido por: Pedro Jardim<br>
+                <i>v1.0 - Fevereiro/2026</i>
+            </div>
+            """, 
+            unsafe_allow_html=True
+        )
 
     if geometria_valida:
         # PRIMEIRA LINHA: Esquema Físico (Esquerda) e Mapa de Calor (Direita)
@@ -271,9 +282,8 @@ def main():
         
         with col_esq:
             st.subheader("Configuração Físico-Mecânica")
-            # Adicionado transparent=True para mesclar com o Streamlit perfeitamente
-            fig_esquema = plot_chapa(L, H, raio, tensao, fg_color, chapa_color)
-            st.pyplot(fig_esquema, transparent=True)
+            fig_esquema = plot_chapa(L, H, raio, tensao, fg_color, chapa_color, bg_color, usar_transparencia)
+            st.pyplot(fig_esquema, transparent=usar_transparencia)
             
             with st.expander("📚 Fundamentação Teórica", expanded=False):
                 st.markdown("""
@@ -287,14 +297,14 @@ def main():
             st.subheader("Campo de Tensões (Equações de Kirsch)")
             with st.spinner("Computando malha..."):
                 X, Y, s_x, Xc, Yc = calcular_campo_tensoes(L, H, raio, tensao)
-                fig_mapa = plot_mapa_calor(X, Y, s_x, Xc, Yc, L, H, raio, tensao, x_coords, fg_color)
-                st.pyplot(fig_mapa, transparent=True)
+                fig_mapa = plot_mapa_calor(X, Y, s_x, Xc, Yc, L, H, raio, tensao, x_coords, fg_color, bg_color, usar_transparencia)
+                st.pyplot(fig_mapa, transparent=usar_transparencia)
 
         # SEGUNDA LINHA: Gráficos de Seção Isolados
         st.divider()
         st.subheader("Cortes Transversais do Perfil de Tensão")
-        fig_secoes = plot_graficos_secao(X, Y, s_x, Xc, L, H, tensao, graficos_juntos, x_coords, fg_color)
-        st.pyplot(fig_secoes, transparent=True)
+        fig_secoes = plot_graficos_secao(X, Y, s_x, Xc, L, H, tensao, graficos_juntos, x_coords, fg_color, bg_color, usar_transparencia)
+        st.pyplot(fig_secoes, transparent=usar_transparencia)
 
 if __name__ == "__main__":
     main()
